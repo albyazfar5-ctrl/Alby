@@ -32,7 +32,7 @@
         <LinearLayout
             android:id="@+id/dots"
             android:layout_width="match_parent"
-            android:layout_height="16dp"
+            android:layout_height="28dp"
             android:gravity="center"
             android:orientation="horizontal" />
 
@@ -74,6 +74,44 @@
                 android:background="@drawable/bg_handle" />
         </FrameLayout>
     </LinearLayout>
+
+    <!-- Folder aplikasi -->
+    <FrameLayout
+        android:id="@+id/folderOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#B3000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginHorizontal="20dp"
+            android:background="@drawable/bg_folder"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/folderTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:paddingBottom="12dp"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/folderGrid"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+    </FrameLayout>
 
     <!-- Recent apps (kartu bertumpuk) -->
     <FrameLayout
