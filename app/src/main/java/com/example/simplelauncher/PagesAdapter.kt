@@ -11,7 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 /** Satu halaman home = satu grid ikon / folder. */
 class PagesAdapter(
     private val cfg: UiConfig,
-    private val onClick: (AppItem) -> Unit,
+    private val onClick: (AppItem, View) -> Unit,
     private val onLongClick: (AppItem, View) -> Unit,
     private val onEmptyLongClick: () -> Unit
 ) : RecyclerView.Adapter<PagesAdapter.VH>() {

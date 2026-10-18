@@ -8,7 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 
 class RecentsAdapter(
     private val cardWidth: Int,
-    private val onClick: (AppItem) -> Unit
+    private val onClick: (AppItem, android.view.View) -> Unit
 ) : RecyclerView.Adapter<RecentsAdapter.VH>() {
 
     private val items = mutableListOf<AppItem>()
@@ -45,7 +45,7 @@ class RecentsAdapter(
         holder.smallIcon.setImageDrawable(item.icon)
         holder.bigIcon.setImageDrawable(item.icon)
         holder.name.text = item.label
-        holder.card.setOnClickListener { onClick(item) }
+        holder.card.setOnClickListener { onClick(item, holder.card) }
     }
 
     override fun getItemCount() = items.size

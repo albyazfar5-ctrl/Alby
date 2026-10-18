@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.simplelauncher"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 4
+        versionName = "1.3"
     }
     buildTypes {
         release { isMinifyEnabled = false }

@@ -18,7 +18,7 @@ class AppAdapter(
     private val showLabel: Boolean,
     private val cfg: UiConfig,
     private val useRowHeight: Boolean,
-    private val onClick: (AppItem) -> Unit,
+    private val onClick: (AppItem, View) -> Unit,
     private val onLongClick: (AppItem, View) -> Unit
 ) : RecyclerView.Adapter<AppAdapter.VH>() {
 
@@ -64,7 +64,7 @@ class AppAdapter(
         else ViewGroup.LayoutParams.WRAP_CONTENT
         holder.itemView.layoutParams = lp
 
-        holder.itemView.setOnClickListener { onClick(item) }
+        holder.itemView.setOnClickListener { onClick(item, holder.icon) }
         holder.itemView.setOnLongClickListener { onLongClick(item, it); true }
     }
 

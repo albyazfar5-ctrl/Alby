@@ -1,5 +1,6 @@
 package com.example.simplelauncher
 
+import android.app.ActivityOptions
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
@@ -19,10 +20,6 @@ import android.os.Bundle
 import android.os.Process
 import android.provider.MediaStore
 import android.provider.Settings
-import android.text.Editable
-import android.text.TextWatcher
-import android.view.GestureDetector
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -52,7 +49,6 @@ class MainActivity : AppCompatActivity() {
     private val cfg = UiConfig()
     private lateinit var pagesAdapter: PagesAdapter
     private lateinit var dockAdapter: AppAdapter
-    private lateinit var searchAdapter: AppAdapter
     private lateinit var folderAdapter: AppAdapter
     private lateinit var recentsAdapter: RecentsAdapter
 
@@ -62,6 +58,8 @@ class MainActivity : AppCompatActivity() {
     private var openFolderId: String? = null
     private val dismissedAt = HashMap<String, Long>()
     private val iconStyleNames = arrayOf("Persegi bulat", "Lingkaran", "Asli (tanpa potong)")
+    private val animNames = arrayOf("Zoom dari ikon", "Pudar", "Geser", "Tanpa animasi")
+    private var launchedApp = false
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) = loadApps()
@@ -93,20 +91,10 @@ class MainActivity : AppCompatActivity() {
         b.dock.layoutManager = GridLayoutManager(this, 4)
         b.dock.adapter = dockAdapter
 
-        // Search
-        searchAdapter = AppAdapter(true, cfg, false, ::onItemClick, menuTop)
-        b.searchResults.layoutManager = GridLayoutManager(this, 4)
-        b.searchResults.adapter = searchAdapter
-        b.searchBox.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) = filter(s?.toString().orEmpty())
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-        })
-
         // Folder
-        folderAdapter = AppAdapter(true, cfg, false, { app ->
+        folderAdapter = AppAdapter(true, cfg, false, { app, v ->
             closeFolder()
-            launchApp(app)
+            launchApp(app, v)
         }, menuFolder)
         b.folderGrid.layoutManager = GridLayoutManager(this, 4)
         b.folderGrid.adapter = folderAdapter
@@ -114,7 +102,6 @@ class MainActivity : AppCompatActivity() {
         b.folderTitle.setOnClickListener { openFolderId?.let { renameFolder(it) } }
 
         setupRecents()
-        setupHandleGesture()
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -122,7 +109,6 @@ class MainActivity : AppCompatActivity() {
                     b.folderOverlay.visibility == View.VISIBLE -> closeFolder()
                     b.recentsOverlay.visibility == View.VISIBLE -> closeRecents()
                     else -> {
-                        resetSearch()
                         b.pager.currentItem = 0
                     }
                 }
@@ -144,6 +130,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         BadgeStore.enabled = prefs.badgesEnabled
         refreshAll()
+        playReturnAnimation()
         if (b.recentsOverlay.visibility == View.VISIBLE) refreshRecents()
     }
 
@@ -152,7 +139,6 @@ class MainActivity : AppCompatActivity() {
         if (intent.action == Intent.ACTION_MAIN) {
             closeFolder()
             closeRecents()
-            resetSearch()
             b.pager.currentItem = 0
         }
     }
@@ -166,7 +152,6 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAll() {
         pagesAdapter.refresh()
         dockAdapter.refresh()
-        searchAdapter.refresh()
         folderAdapter.refresh()
     }
 
@@ -219,8 +204,6 @@ class MainActivity : AppCompatActivity() {
             pagesAdapter.submit(pages)
             buildDots(pages.size)
         }
-        filter(b.searchBox.text?.toString().orEmpty())
-
         openFolderId?.let { id ->
             if (stored.any { it.id == id }) openFolder(id) else closeFolder()
         }
@@ -263,12 +246,29 @@ class MainActivity : AppCompatActivity() {
         return BitmapDrawable(resources, bmp)
     }
 
-    private fun onItemClick(item: AppItem) {
-        if (item.isFolder) item.folderId?.let { openFolder(it) } else launchApp(item)
+    private fun onItemClick(item: AppItem, view: View) {
+        if (item.isFolder) item.folderId?.let { openFolder(it) } else launchApp(item, view)
     }
 
-    private fun launchApp(app: AppItem) {
-        packageManager.getLaunchIntentForPackage(app.packageName)?.let { startActivity(it) }
+    private fun launchApp(app: AppItem, anchor: View?) {
+        val intent = packageManager.getLaunchIntentForPackage(app.packageName) ?: return
+        val opts: Bundle? = when (prefs.animStyle) {
+            0 -> if (anchor != null) {
+                ActivityOptions.makeScaleUpAnimation(
+                    anchor, 0, 0, anchor.width, anchor.height
+                ).toBundle()
+            } else null
+            1 -> ActivityOptions.makeCustomAnimation(
+                this, android.R.anim.fade_in, android.R.anim.fade_out
+            ).toBundle()
+            2 -> ActivityOptions.makeCustomAnimation(
+                this, R.anim.slide_in_right, R.anim.slide_out_left
+            ).toBundle()
+            else -> ActivityOptions.makeCustomAnimation(this, 0, 0).toBundle()
+        }
+        playLaunchAnimation()
+        launchedApp = true
+        startActivity(intent, opts)
     }
 
     // ------------------------------------------------------ Menu tekan lama
@@ -287,6 +287,7 @@ class MainActivity : AppCompatActivity() {
                 if (inFolder) menu.add(0, 5, 4, "Keluarkan dari folder")
                 else if (!inDock) menu.add(0, 6, 4, "Masukkan ke folder")
             }
+            menu.add(0, 20, 9, "Pengaturan launcher")
             setOnMenuItemClickListener {
                 val uri = Uri.parse("package:${app.packageName}")
                 when (it.itemId) {
@@ -296,6 +297,7 @@ class MainActivity : AppCompatActivity() {
                     4 -> hideApp(app)
                     5 -> removeFromFolder(app)
                     6 -> addToFolderDialog(app)
+                    20 -> showSettings()
                     10 -> app.folderId?.let { id -> renameFolder(id) }
                     11 -> app.folderId?.let { id -> disbandFolder(id) }
                 }
@@ -431,21 +433,54 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSettings() {
         val items = arrayOf(
+            "Animasi buka/tutup aplikasi: ${animNames[prefs.animStyle]}",
             "Ukuran kisi: ${prefs.columns}×${prefs.rows}",
             "Gaya ikon: ${iconStyleNames[prefs.iconStyle]}",
             "Badge notifikasi: ${if (prefs.badgesEnabled) "Aktif" else "Mati"}",
-            "Aplikasi tersembunyi (${prefs.hidden.size})"
+            "Aplikasi tersembunyi (${prefs.hidden.size})",
+            "Jadikan launcher default",
+            "Tentang"
         )
         AlertDialog.Builder(this)
             .setTitle("Pengaturan Transsion Launcher")
             .setItems(items) { _, which ->
                 when (which) {
-                    0 -> chooseGrid()
-                    1 -> chooseIconStyle()
-                    2 -> toggleBadges()
-                    3 -> manageHidden()
+                    0 -> chooseAnimation()
+                    1 -> chooseGrid()
+                    2 -> chooseIconStyle()
+                    3 -> toggleBadges()
+                    4 -> manageHidden()
+                    5 -> setDefaultLauncher()
+                    6 -> showAbout()
                 }
             }
+            .show()
+    }
+
+    private fun chooseAnimation() {
+        AlertDialog.Builder(this)
+            .setTitle("Animasi buka/tutup aplikasi")
+            .setSingleChoiceItems(animNames, prefs.animStyle) { d, which ->
+                prefs.animStyle = which
+                d.dismiss()
+                Toast.makeText(this, "Animasi: ${animNames[which]}", Toast.LENGTH_SHORT).show()
+            }
+            .show()
+    }
+
+    private fun setDefaultLauncher() {
+        try {
+            startActivity(Intent(Settings.ACTION_HOME_SETTINGS))
+        } catch (e: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
+    private fun showAbout() {
+        AlertDialog.Builder(this)
+            .setTitle("Transsion Launcher")
+            .setMessage("Versi 1.2\n\nTekan lama area kosong di layar home atau titik halaman untuk membuka pengaturan ini.")
+            .setPositiveButton("OK", null)
             .show()
     }
 
@@ -515,23 +550,50 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // -------------------------------------------------------------- Search
+    // ------------------------------------------------------------- Animasi
 
-    private fun filter(q: String) {
-        val text = q.trim().lowercase()
-        if (text.isEmpty()) {
-            b.searchResults.visibility = View.GONE
-            b.pager.visibility = View.VISIBLE
-        } else {
-            b.pager.visibility = View.INVISIBLE
-            b.searchResults.visibility = View.VISIBLE
-            searchAdapter.submit(visibleApps.filter { it.label.lowercase().contains(text) })
+    /** Layar home memudar/membesar saat aplikasi dibuka. */
+    private fun playLaunchAnimation() {
+        val v = b.content
+        val a = v.animate().setDuration(220)
+        when (prefs.animStyle) {
+            0 -> a.scaleX(1.12f).scaleY(1.12f).alpha(0f)
+            1 -> a.alpha(0f)
+            2 -> a.translationX(-v.width / 4f).alpha(0f)
+            else -> return
+        }
+        a.start()
+    }
+
+    /** Layar home muncul kembali saat aplikasi ditutup. */
+    private fun playReturnAnimation() {
+        val v = b.content
+        v.animate().cancel()
+        if (!launchedApp) {
+            resetContent()
+            return
+        }
+        launchedApp = false
+        when (prefs.animStyle) {
+            0 -> {
+                v.scaleX = 1.12f; v.scaleY = 1.12f; v.alpha = 0f
+                v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(260).start()
+            }
+            1 -> {
+                v.alpha = 0f
+                v.animate().alpha(1f).setDuration(220).start()
+            }
+            2 -> {
+                v.translationX = -v.width / 4f; v.alpha = 0f
+                v.animate().translationX(0f).alpha(1f).setDuration(240).start()
+            }
+            else -> resetContent()
         }
     }
 
-    private fun resetSearch() {
-        b.searchBox.setText("")
-        b.searchBox.clearFocus()
+    private fun resetContent() {
+        val v = b.content
+        v.scaleX = 1f; v.scaleY = 1f; v.alpha = 1f; v.translationX = 0f
     }
 
     // ----------------------------------------------------------- Page dots
@@ -562,9 +624,9 @@ class MainActivity : AppCompatActivity() {
     private fun setupRecents() {
         val screenW = resources.displayMetrics.widthPixels
         val cardW = (screenW * 0.62f).toInt()
-        recentsAdapter = RecentsAdapter(cardW) { app ->
+        recentsAdapter = RecentsAdapter(cardW) { app, v ->
             closeRecents()
-            launchApp(app)
+            launchApp(app, v)
         }
 
         val rv = b.recentsList
@@ -624,24 +686,6 @@ class MainActivity : AppCompatActivity() {
             c.scaleX = s
             c.scaleY = s
             c.translationZ = (1.5f - d) * 10f
-        }
-    }
-
-    private fun setupHandleGesture() {
-        val gd = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
-            override fun onDown(e: MotionEvent) = true
-            override fun onSingleTapUp(e: MotionEvent): Boolean { openRecents(); return true }
-            override fun onFling(
-                e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float
-            ): Boolean {
-                if (vy < -600f) { openRecents(); return true }
-                return false
-            }
-        })
-        b.handleArea.setOnTouchListener { v, ev ->
-            val handled = gd.onTouchEvent(ev)
-            if (ev.action == MotionEvent.ACTION_UP) v.performClick()
-            handled
         }
     }
 

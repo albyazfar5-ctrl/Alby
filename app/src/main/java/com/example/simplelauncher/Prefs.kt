@@ -17,6 +17,10 @@ class Prefs(context: Context) {
         get() = sp.getInt("rows", 5)
         set(v) = sp.edit().putInt("rows", v).apply()
 
+    var animStyle: Int
+        get() = sp.getInt("animStyle", 0)
+        set(v) = sp.edit().putInt("animStyle", v).apply()
+
     var iconStyle: Int
         get() = sp.getInt("iconStyle", 0)
         set(v) = sp.edit().putInt("iconStyle", v).apply()
