@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Transsion Launcher</string>
+    <string name="search_hint">Cari aplikasi…</string>
+    <string name="app_info">Info aplikasi</string>
+    <string name="uninstall">Copot pemasangan</string>
+    <string name="recents_empty">Belum ada aplikasi terbaru</string>
+    <string name="recents_need_permission">Untuk menampilkan aplikasi terbaru, beri izin Akses Penggunaan.</string>
+    <string name="grant_permission">Beri izin</string>
+</resources>
